@@ -1,0 +1,18 @@
+<div class="container">
+    {{output|safe}}
+</div>
+    
+<script type="text/javascript" charset="utf-8">
+    $(document).ready(function() {
+        $('.dataframe').DataTable({
+                        "searching": true,
+                        "bLengthChange": true,
+                        "autoWidth": true,
+                        "sDom": 'Rfrtlip', 
+                        // "order": [[ 1, "desc" ]]
+                    });
+        $('.dataframe')
+            .removeClass('display')
+            .addClass('table table-striped table-bordered');
+    });
+</script>

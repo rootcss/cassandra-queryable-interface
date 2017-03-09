@@ -1,0 +1,208 @@
+<html>
+    <head>
+        <title>Queryable Cassandra with Spark</title>
+        <!-- <link rel=stylesheet type=text/css href="{{ url_for('static', filename='style.css') }}"> -->
+         <meta name="viewport" content="width=device-width, initial-scale=1">
+         <meta http-equiv="content-type" content="text/html; charset=utf-8" />
+         <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css">
+         <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.12.4/jquery.min.js"></script>
+         <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js"></script>
+         <link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/r/bs-3.3.5/jq-2.1.4,dt-1.10.8/datatables.min.css" />
+        <script type="text/javascript" src="https://cdn.datatables.net/r/bs-3.3.5/jqc-1.11.3,dt-1.10.8/datatables.min.js"></script>
+        <!--<link rel="stylesheet" href="//cdnjs.cloudflare.com/ajax/libs/highlight.js/9.10.0/styles/default.min.css">-->
+        <script src="//cdnjs.cloudflare.com/ajax/libs/ace/1.2.6/ace.js"></script>
+        <script src="//cdnjs.cloudflare.com/ajax/libs/ace/1.2.6/snippets/sql.js"></script>
+    </head>
+    <body>
+        <div id="container" style="width: 1200px;margin: 0 auto;">
+            <div id="left" style="width:280px;float:left;">
+                <div id="keyspace" class="sidebar-widget">
+                    <h3 class="title">Query Me!</h3>
+                    <br>
+                    <span id="keyspace_name"></span>
+                </div>
+                <div id="tables" style="max-height: 150px;overflow: scroll;" class="sidebar-widget">
+                    <blockquote class="blockquote_table_list">
+                        <span id="table_list"></span>
+                    </blockquote>
+                </div>
+                <div id="columns" style="max-height: 400px;overflow: scroll;margin-top:-30px;" class="sidebar-widget">
+                    <br>
+                    <span id="column_list"></span>
+                </div>
+            </div>
+
+            <div id="right" style="float: right;width:900px;">
+                <div id="content" style="margin-top:20px;margin-bottom:5px;">
+                    <div class="input-group">
+                        <textarea wrap="off" autocapitalize="off" spellcheck="false" id="query-query" name="query" class="form-control custom-control" rows="3" style="resize:none">SELECT user_id, id, amount_in_paise, created_at FROM transactions</textarea>  
+                        <span id="query-submit" class="input-group-addon btn btn-primary">Execute</span>
+                    </div>
+                    <!--</form>-->
+                </div>
+                <div id="status-bar">
+
+                </div>
+                <div id="query-result">
+
+                </div>
+            </div>
+        </div>
+        <script>
+            $( document ).ready(function() {
+                $('#status-bar').hide();
+                $.ajax({
+                    type: 'GET',
+                    url: '/get_keyspace',
+                    success: function (data) {
+                        $('#keyspace_name').html(data);
+                    }
+                });
+
+                $.ajax({
+                    type: 'GET',
+                    url: '/list_tables/',
+                    success: function (data) {
+                        let table_dict = JSON.parse(data).tableName;
+                        let table_list = [];
+                        for(var p in table_dict) {
+                            table_list.push(table_dict[p])
+                        }
+                        let output = '';
+                        for(let t in table_list) {
+                            output = output + '<span class="table_name_label" id="table_name_'+table_list[t]+'">'+table_list[t]+'</span><br>';
+                        }
+                        $('#table_list').html(output);
+                    }
+                });
+
+
+                $('body').on('click','[id^="table_name_"]' ,function (data) {
+                    let selected_table = $(this).attr('id').split('table_name_')[1];
+                    $.ajax({
+                        type: 'GET',
+                        url: '/list_columns',
+                        data: {'table': selected_table},
+                        success: function (data) {
+                            let column_list_dict = JSON.parse(data);
+                            let col_names = column_list_dict.col_name;
+                            let data_types = column_list_dict.data_type;
+                            let output = '<table class="columns-table" border=1>\
+                                            <thead>\
+                                                <tr><th>Column</th><th>Data Type</th></tr>\
+                                            </thead>\
+                                            <tbody>';
+                            for(let id in col_names) {
+                                output += '<tr><td>'+col_names[id]+'</td><td>'+data_types[id]+'</td></tr>';
+                            }
+                            output += '</tbody></table>';
+                            $('#column_list').html(output);
+                        }
+                    });
+                });
+            
+                $('#query-submit').on('click', function () {
+                    $('#status-bar').show();
+                    let start_time = Date.now();
+                    $('#query-result').html('<br><br><center>Loading..</center>');
+                    let query = $('#query-query').val();
+                    let loading = true;
+                    let loading_timer_id = setInterval(function() {
+                        let loading_time = Date.now() - start_time;
+                        if(loading != false) {
+                            $('#status-bar').html('Time Elapsed: '+loading_time/1000+' seconds');
+                        }
+                    }, 100);
+                    $.ajax({
+                        type: 'POST',
+                        url: '/spark/',
+                        data: {'query': query},
+                        success: function (data) {
+                            clearInterval(loading_timer_id);
+                            $('#query-result').html(data);
+                        }
+                    });
+                });
+
+            });
+        </script>
+    </body>
+    <style type="text/css">
+        #container {
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', 'source-code-pro', monospace;
+        }
+        input[type=text] {
+           padding: 5px;
+           font-size: 14px;
+        }
+        #content {
+            text-align: center;
+        }
+        .title {
+            color: #2574A9;
+        }
+        .give-border {
+            border: 1px solid black;
+        }
+        .table_name_label {
+
+        }
+        .table_name_label:hover {
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+        .columns-table {
+            border: solid 1px #DDEEEE;
+            border-collapse: collapse;
+            border-spacing: 0;
+            font-size: 12px;
+        }
+        .columns-table thead th {
+            background-color: #DDEFEF;
+            border: solid 1px #DDEEEE;
+            color: #336B6B;
+            padding: 5px;
+            text-align: left;
+            text-shadow: 1px 1px 1px #fff;
+        }
+        .columns-table tbody td {
+            border: solid 1px #DDEEEE;
+            color: #333;
+            padding: 5px;
+            text-shadow: 1px 1px 1px #fff;
+        }
+        .sidebar-widget {
+            padding-bottom: 20px;
+        }
+        .dataframe {
+            font-size: 12px;
+            border-radius: 2px;
+        }
+        #query-result {
+            overflow: scroll;
+            max-height: 1000px;
+        }
+        #keyspace_name {
+            font-weight: bold;
+            font-size: 16px;
+        }
+        .blockquote_table_list {
+            font-size: 15px;
+        }
+        #query-query {
+
+        }
+        .dataTables_filter {
+            display: none;
+        }
+        #status-bar {
+            width:100%;
+            background-color:#ECECEC;
+            padding:3px;
+            text-align:center;
+            border-radius:2px;
+            height: 25px;
+        }
+    </style>
+</html>
