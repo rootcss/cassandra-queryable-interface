@@ -1,0 +1,6 @@
+*.pyc
+metastore_db/
+.vscode
+.idea
+*.log
+shekhar.md
